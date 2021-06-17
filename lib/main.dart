@@ -29,20 +29,16 @@ class CanvasToImagePage extends StatefulWidget {
   _CanvasToImagePageState createState() => _CanvasToImagePageState();
 }
 
-enum _BufferBuilder {
-  off,
-  picture,
-  imageFromPictureRecorder,
-  imageFromRepaintBoundary,
-  imageProviderFromPictureRecorder,
-  imageProviderFromRepaintBoundary
-}
+enum _BufferType { off, picture, image, imageProvider }
+
+enum BufferSource { pictureRecorder, repaintBoundary }
 
 class _CanvasToImagePageState extends State<CanvasToImagePage> {
   final Size _size = Size(500, 300);
   final GlobalKey _repaintKey = GlobalKey();
 
-  _BufferBuilder _bufferBuilder = _BufferBuilder.off;
+  _BufferType _bufferType = _BufferType.off;
+  BufferSource? _bufferSource;
 
   bool _bufferLoading = false;
 
@@ -67,33 +63,36 @@ class _CanvasToImagePageState extends State<CanvasToImagePage> {
   }
 
   Widget _buildMenu() {
-    return Padding(
+    List<Widget> children = [
+      Padding(child: Text('Buffer:'), padding: EdgeInsets.only(bottom: 16)),
+      _buildBufferTypeButton('Off', _BufferType.off),
+      _buildBufferTypeButton('Picture', _BufferType.picture),
+      _buildBufferTypeButton('Image', _BufferType.image),
+      _buildBufferTypeButton('ImageProvider', _BufferType.imageProvider)
+    ];
+    List<BufferSource> bufferSources = getBufferSources(_bufferType);
+    if (bufferSources.isNotEmpty) {
+      children.add(Padding(
+          child: Text('Source:'),
+          padding: EdgeInsets.only(top: 16, bottom: 16)));
+      for (BufferSource bufferSource in bufferSources) {
+        children.add(_buildBufferSourceButton(bufferSource));
+      }
+    }
+    return Container(
         child: Column(
-          children: [
-            Padding(
-                child: Text('Buffer:'), padding: EdgeInsets.only(bottom: 16)),
-            _buildMenuButton('Off', _BufferBuilder.off),
-            _buildMenuButton(
-                'PictureRecorder > Picture', _BufferBuilder.picture),
-            _buildMenuButton('PictureRecorder > Image',
-                _BufferBuilder.imageFromPictureRecorder),
-            _buildMenuButton('RepaintBoundary > Image',
-                _BufferBuilder.imageFromRepaintBoundary),
-            _buildMenuButton('PictureRecorder > ImageProvider',
-                _BufferBuilder.imageProviderFromPictureRecorder),
-            _buildMenuButton('RepaintBoundary > ImagePovider',
-                _BufferBuilder.imageProviderFromRepaintBoundary)
-          ],
+          children: children,
         ),
         padding: EdgeInsets.all(16));
   }
 
-  Widget _buildMenuButton(String text, _BufferBuilder bufferBuilder) {
+  Widget _buildBufferTypeButton(String text, _BufferType bufferType) {
     TextButton textButton = TextButton(
         onPressed: () {
           if (!_bufferLoading) {
             setState(() {
-              _bufferBuilder = bufferBuilder;
+              _bufferType = bufferType;
+              _bufferSource = getDefaultBufferSource(bufferType);
               _picture = null;
               _image = null;
               _imageProvider = null;
@@ -102,7 +101,7 @@ class _CanvasToImagePageState extends State<CanvasToImagePage> {
         },
         child: Text(text));
     Color? color = Colors.transparent;
-    if (_bufferBuilder == bufferBuilder) {
+    if (_bufferType == bufferType) {
       color = Colors.blue;
     }
     return Container(
@@ -111,96 +110,113 @@ class _CanvasToImagePageState extends State<CanvasToImagePage> {
         padding: EdgeInsets.fromLTRB(8, 0, 8, 0));
   }
 
+  Widget _buildBufferSourceButton(BufferSource bufferSource) {
+    TextButton textButton = TextButton(
+        onPressed: () {
+          if (!_bufferLoading) {
+            setState(() {
+              _bufferSource = bufferSource;
+              _picture = null;
+              _image = null;
+              _imageProvider = null;
+            });
+          }
+        },
+        child: Text(bufferSource.toString().split('.').last));
+    Color? color = Colors.transparent;
+    if (_bufferSource == bufferSource) {
+      color = Colors.blue;
+    }
+    return Container(
+        child: textButton,
+        decoration: BoxDecoration(border: Border.all(color: color)),
+        padding: EdgeInsets.fromLTRB(8, 0, 8, 0));
+  }
+
+  List<BufferSource> getBufferSources(_BufferType bufferType) {
+    switch (bufferType) {
+      case _BufferType.picture:
+        return [BufferSource.pictureRecorder];
+      case _BufferType.image:
+        return [BufferSource.pictureRecorder, BufferSource.repaintBoundary];
+      case _BufferType.imageProvider:
+        return [BufferSource.pictureRecorder, BufferSource.repaintBoundary];
+      default:
+        return [];
+    }
+  }
+
+  BufferSource? getDefaultBufferSource(_BufferType bufferType) {
+    List<BufferSource> sources = getBufferSources(bufferType);
+    return sources.isNotEmpty ? sources.first : null;
+  }
+
   Widget _buildCanvas() {
-    if (_bufferBuilder == _BufferBuilder.off) {
+    if (_bufferType == _BufferType.off) {
       return CustomPaint(painter: _Painter(), child: Container());
-    } else if (_bufferBuilder == _BufferBuilder.picture) {
+    } else {
       if (_picture != null) {
         return CustomPaint(
             painter: _BufferPainter(picture: _picture), child: Container());
-      }
-      _loadNewBuffer();
-      return Text('Loading...');
-    } else if (_bufferBuilder == _BufferBuilder.imageFromPictureRecorder) {
-      if (_image != null) {
+      } else if (_image != null) {
         return CustomPaint(
             painter: _BufferPainter(image: _image), child: Container());
-      }
-      _loadNewBuffer();
-      return Text('Loading...');
-    } else if (_bufferBuilder == _BufferBuilder.imageFromRepaintBoundary) {
-      if (_image != null) {
-        return CustomPaint(
-            painter: _BufferPainter(image: _image), child: Container());
-      }
-      _loadNewBuffer();
-      return RepaintBoundary(
-          key: _repaintKey,
-          child: CustomPaint(painter: _Painter(), child: Container()));
-    } else if (_bufferBuilder ==
-        _BufferBuilder.imageProviderFromPictureRecorder) {
-      if (_imageProvider != null) {
+      } else if (_imageProvider != null) {
         return Image(
             image: _imageProvider!,
             isAntiAlias: true,
             filterQuality: FilterQuality.high);
       }
-      _loadNewBuffer();
-      return Text('Loading...');
-    } else if (_bufferBuilder ==
-        _BufferBuilder.imageProviderFromRepaintBoundary) {
-      if (_imageProvider != null) {
-        return Image(
-            image: _imageProvider!,
-            isAntiAlias: true,
-            filterQuality: FilterQuality.high);
+      _scheduleBufferLoad();
+      if (_bufferSource == BufferSource.repaintBoundary) {
+        return RepaintBoundary(
+            key: _repaintKey,
+            child: CustomPaint(painter: _Painter(), child: Container()));
       }
-      _loadNewBuffer();
-      return RepaintBoundary(
-          key: _repaintKey,
-          child: CustomPaint(painter: _Painter(), child: Container()));
+      return Text('Loading...');
     }
-    throw UnimplementedError(_bufferBuilder.toString());
   }
 
-  _loadNewBuffer() {
+  _scheduleBufferLoad() {
     if (!_bufferLoading) {
       // running out of build
       Future.delayed(Duration.zero, () {
         setState(() {
           _bufferLoading = true;
         });
-        if (_bufferBuilder == _BufferBuilder.picture) {
+        if (_bufferType == _BufferType.picture) {
           _loadPicture().then((value) {
             setState(() {
               _picture = value;
               _bufferLoading = false;
             });
           });
-        } else if (_bufferBuilder == _BufferBuilder.imageFromPictureRecorder) {
+        } else if (_bufferType == _BufferType.image &&
+            _bufferSource == BufferSource.pictureRecorder) {
           _loadImageFromPictureRecorder().then((value) {
             setState(() {
               _image = value;
               _bufferLoading = false;
             });
           });
-        } else if (_bufferBuilder == _BufferBuilder.imageFromRepaintBoundary) {
+        } else if (_bufferType == _BufferType.image &&
+            _bufferSource == BufferSource.repaintBoundary) {
           _loadImageFromRepaintBoundary().then((value) {
             setState(() {
               _image = value;
               _bufferLoading = false;
             });
           });
-        } else if (_bufferBuilder ==
-            _BufferBuilder.imageProviderFromPictureRecorder) {
+        } else if (_bufferType == _BufferType.imageProvider &&
+            _bufferSource == BufferSource.pictureRecorder) {
           _loadImageProviderFromPictureRecorder().then((value) {
             setState(() {
               _imageProvider = value;
               _bufferLoading = false;
             });
           });
-        } else if (_bufferBuilder ==
-            _BufferBuilder.imageProviderFromRepaintBoundary) {
+        } else if (_bufferType == _BufferType.imageProvider &&
+            _bufferSource == BufferSource.repaintBoundary) {
           _loadImageProviderFromRepaintBoundary().then((value) {
             setState(() {
               _imageProvider = value;
