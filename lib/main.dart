@@ -275,9 +275,26 @@ class _Painter extends CustomPainter {
     canvas.drawLine(
         Offset(size.width / 2, 0), Offset(size.width / 2, size.height), paint);
     canvas.drawLine(
+        Offset(size.width / 2, 0), Offset(size.width / 4, size.height), paint);
+    canvas.drawLine(Offset(size.width / 2, 0),
+        Offset(6 * size.width / 8, size.height), paint);
+    canvas.drawLine(
         Offset(0, size.height / 2), Offset(size.width, size.height / 2), paint);
+    canvas.drawLine(Offset(0, 5 * size.height / 8),
+        Offset(size.width / 4, size.height), paint);
+    canvas.drawLine(Offset(0, 6 * size.height / 8),
+        Offset(size.width / 4, size.height), paint);
+    canvas.drawLine(Offset(0, 7 * size.height / 8),
+        Offset(size.width / 4, size.height), paint);
     canvas.drawCircle(
         Offset(3 * size.width / 4, size.height / 4), size.width / 10, paint);
+
+    paint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.red
+      ..isAntiAlias = true;
+    canvas.drawCircle(
+        Offset(3 * size.width / 4, size.height / 4), size.width / 20, paint);
   }
 
   @override
